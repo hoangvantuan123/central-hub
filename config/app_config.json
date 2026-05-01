@@ -1,0 +1,99 @@
+{
+  "tabs": [
+    {
+      "id": "projects",
+      "label": "DỰ ÁN",
+      "icon": "▶",
+      "color": "#0ea5e9",
+      "title": "PROJECT CLUSTERS",
+      "statusLabel": null,
+      "serviceKey": null,
+      "dataKey": "presetProjects",
+      "viewType": "pm2",
+      "viewTitle": "PM2_CLUSTER_VIEW"
+    },
+    {
+      "id": "nginx",
+      "label": "NGINX",
+      "icon": "▶",
+      "color": "#eab308",
+      "title": "NGINX NODE",
+      "statusLabel": "NET_STATUS",
+      "serviceKey": "nginx",
+      "dataKey": "presetNginx",
+      "viewType": "service",
+      "viewTitle": "NGINX_CLUSTER_VIEW"
+    },
+    {
+      "id": "redis",
+      "label": "REDIS",
+      "icon": "▶",
+      "color": "#ef4444",
+      "title": "REDIS NODE",
+      "statusLabel": "MEM_STATUS",
+      "serviceKey": "redis",
+      "dataKey": "presetRedis",
+      "viewType": "service",
+      "viewTitle": "REDIS_CLUSTER_VIEW"
+    },
+    {
+      "id": "cloudflare",
+      "label": "CLOUD",
+      "icon": "▶",
+      "color": "#f58220",
+      "title": "CLOUDFLARE TUNNEL",
+      "statusLabel": "TUNNEL_STATUS",
+      "serviceKey": "cloudflare",
+      "dataKey": "presetCloudflare",
+      "viewType": "service",
+      "viewTitle": "TUNNEL_CLUSTER_VIEW"
+    }
+  ],
+  "services": {
+    "presetProjects": [
+      {
+        "id": "TICO_1",
+        "name": "TICO 1",
+        "path": "C:\\Users\\tuanhoang\\Desktop\\platx_tienhung\\microservice\\pm2",
+        "command": "pm2 start prod_ecosystem.config.js"
+      },
+      {
+        "id": "TICO_2",
+        "name": "TICO 2",
+        "path": "C:\\Users\\tuanhoang\\Desktop\\platx_tienhung_2\\microservice\\pm2",
+        "command": "pm2 start prod_ecosystem.config.js"
+      }
+    ],
+    "presetNginx": [
+      {
+        "id": "nginx_main",
+        "name": "NGINX NODE 1",
+        "path": "C:\\nginx",
+        "command": "nginx.exe",
+        "processName": "nginx.exe"
+      }
+    ],
+    "presetRedis": [
+      {
+        "id": "redis_main",
+        "name": "REDIS NODE 1",
+        "path": "C:\\redis",
+        "command": "redis-server.exe",
+        "processName": "redis-server.exe"
+      }
+    ],
+    "presetCloudflare": [
+      {
+        "id": "cf_1",
+        "name": "Tico Tunnel",
+        "path": "C:\\Users\\tuanhoang\\Desktop\\cloudflared",
+        "command": "cloudflared tunnel run f382500e-1e8f-4512-bd14-c1bb4b9541dd",
+        "processName": "cloudflared.exe"
+      }
+    ]
+  },
+  "settings": {
+    "cloudflarePath": "C:\\Users\\tuanhoang\\Desktop\\cloudflared",
+    "cloudflareLog": "C:\\Users\\tuanhoang\\cloudflared.log"
+  }
+}

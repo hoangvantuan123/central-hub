@@ -1,0 +1,58 @@
+{
+  "name": "central-infra-hub",
+  "version": "1.0.0",
+  "description": "Hệ thống quản lý Hạ tầng ERP tập trung",
+  "author": "Tuan Hoang",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:win": "npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "pm2": "^5.3.1",
+    "systeminformation": "^5.31.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "jimp": "^1.6.1",
+    "png-to-ico": "^3.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vite": "^5.4.21"
+  },
+  "build": {
+    "appId": "com.central.hub",
+    "productName": "CENTRAL HUB",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "uninstallDisplayName": "CENTRAL HUB"
+    },
+    "icon": "resources/icon.ico",
+    "extraFiles": [
+      {
+        "from": "config",
+        "to": "config",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  }
+}
