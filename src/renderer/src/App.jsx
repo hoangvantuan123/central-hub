@@ -18,6 +18,20 @@ function App() {
   const [services, setServices] = useState({ nginx: false, redis: false, cloudflare: false })
   const [activeTab, setActiveTab] = useState(null)
   const [logHeight, setLogHeight] = useState(35)
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+      if (window.innerWidth < 1000) setIsSidebarOpen(false)
+      else setIsSidebarOpen(true)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const isSmall = windowWidth < 1000
 
   const rightData = useMemo(() => {
     if (!appConfig || !activeTab) return { title: '', data: [], type: '' }
@@ -32,6 +46,19 @@ function App() {
 
     // Service type
     const rawData = presetData[tab.dataKey] || []
+    
+    if (tab.id === 'redis' && services.redisNodes) {
+      return {
+        title: tab.viewTitle,
+        data: rawData.map(p => ({ 
+          ...p, 
+          status: (services.redisNodes[p.serviceName] || '').toLowerCase().includes('running') ? 'online' : 'offline',
+          rawStatus: services.redisNodes[p.serviceName] || 'NOT_INSTALLED'
+        })),
+        type: 'service'
+      }
+    }
+
     const status = services[tab.serviceKey] ? 'online' : 'offline'
     return { 
       title: tab.viewTitle, 
@@ -236,42 +263,53 @@ function App() {
          .status-badge { display: inline-block; padding: 4px 8px; font-size: 10px; font-weight: bold; letter-spacing: 1px; }
        `}</style>
        
-       <header style={{ borderBottom: `1px solid ${theme.border}`, background: theme.panelBg, padding: '0 20px', display: 'flex', alignItems: 'center', height: '50px' }}>
-         <h1 style={{ margin: 0, fontSize: '15px', textTransform: 'uppercase', letterSpacing: '3px', color: theme.text, fontWeight: 'bold' }}>
+       <header style={{ borderBottom: `1px solid ${theme.border}`, background: theme.panelBg, padding: '0 20px', display: 'flex', alignItems: 'center', height: '50px', zIndex: 100 }}>
+         {isSmall && (
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{ background: 'transparent', border: 'none', color: theme.text, fontSize: '20px', cursor: 'pointer', marginRight: '15px', display: 'flex', alignItems: 'center' }}>
+              {isSidebarOpen ? '✕' : '☰'}
+            </button>
+         )}
+         <h1 style={{ margin: 0, fontSize: isSmall ? '13px' : '15px', textTransform: 'uppercase', letterSpacing: '3px', color: theme.text, fontWeight: 'bold' }}>
            <span style={{ color: theme.primary }}>CENTRAL HUB</span>
          </h1>
          <div style={{ flex: 1 }}></div>
          
-         <div style={{ display: 'flex', gap: '8px', marginRight: '20px' }}>
-            <button 
-              onClick={() => setActiveTab('projects')}
-              style={{ 
-                background: activeTab === 'projects' ? theme.primary : 'transparent', 
-                border: `1px solid ${theme.border}`, 
-                color: activeTab === 'projects' ? '#fff' : theme.primary, 
-                padding: '5px 15px', 
-                cursor: 'pointer', 
-                fontSize: '11px', 
-                fontWeight: 'bold',
-                borderRadius: '4px'
-              }}>
-              🚀 RUN SERVER
-            </button>
+         <div style={{ display: 'flex', gap: '8px', marginRight: isSmall ? '5px' : '20px' }}>
+            {!isSmall && (
+               <>
+                  <button 
+                    onClick={() => setActiveTab('projects')}
+                    style={{ 
+                      background: activeTab === 'projects' ? theme.primary : 'transparent', 
+                      border: `1px solid ${theme.border}`, 
+                      color: activeTab === 'projects' ? '#fff' : theme.primary, 
+                      padding: '5px 15px', 
+                      cursor: 'pointer', 
+                      fontSize: '11px', 
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
+                    }}>
+                    🚀 RUN SERVER
+                  </button>
 
-            <button 
-              onClick={() => setActiveTab('monitor')}
-              style={{ 
-                background: activeTab === 'monitor' ? theme.primary : 'transparent', 
-                border: `1px solid ${theme.border}`, 
-                color: activeTab === 'monitor' ? '#fff' : theme.success, 
-                padding: '5px 15px', 
-                cursor: 'pointer', 
-                fontSize: '11px', 
-                fontWeight: 'bold',
-                borderRadius: '4px'
-              }}>
-              📊 MONITOR
-            </button>
+                  <button 
+                    onClick={() => setActiveTab('monitor')}
+                    style={{ 
+                      background: activeTab === 'monitor' ? theme.primary : 'transparent', 
+                      border: `1px solid ${theme.border}`, 
+                      color: activeTab === 'monitor' ? '#fff' : theme.success, 
+                      padding: '5px 15px', 
+                      cursor: 'pointer', 
+                      fontSize: '11px', 
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
+                    }}>
+                    📊 MONITOR
+                  </button>
+               </>
+            )}
             
             <button 
               onClick={async () => {
@@ -283,27 +321,42 @@ function App() {
             </button>
          </div>
 
-
-
-         <button onClick={() => setIsDark(!isDark)} style={{ marginRight: '20px', background: 'transparent', border: `1px solid ${theme.border}`, color: theme.text, padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
-            {isDark ? '☀ LIGHT MODE' : '☾ DARK MODE'}
+         <button onClick={() => setIsDark(!isDark)} style={{ marginRight: isSmall ? '5px' : '20px', background: 'transparent', border: `1px solid ${theme.border}`, color: theme.text, padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
+            {isDark ? '☀' : '☾'}
          </button>
 
-         <div style={{ fontSize: '12px', color: theme.success, letterSpacing: '1px', fontWeight: 'bold' }}>● ACTIVE</div>
+         {!isSmall && <div style={{ fontSize: '12px', color: theme.success, letterSpacing: '1px', fontWeight: 'bold' }}>● ACTIVE</div>}
        </header>
 
-       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-         {activeTab !== 'monitor' && (
-           <LeftSidebar 
-              theme={theme}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              tabs={tabs}
-              presetData={presetData}
-              services={services}
-              handleRunPreset={handleRunPreset}
-              handleServiceAction={handleServiceAction}
-           />
+       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+         {(activeTab !== 'monitor' && (isSidebarOpen || !isSmall)) && (
+           <div style={{ 
+              position: isSmall ? 'absolute' : 'relative',
+              left: 0, top: 0, bottom: 0,
+              width: isSmall ? '280px' : '350px',
+              zIndex: 50,
+              background: theme.panelBg,
+              boxShadow: isSmall ? '5px 0 15px rgba(0,0,0,0.3)' : 'none',
+              transition: 'all 0.3s'
+           }}>
+             <LeftSidebar 
+                theme={theme}
+                activeTab={activeTab}
+                setActiveTab={(t) => { setActiveTab(t); if(isSmall) setIsSidebarOpen(false); }}
+                tabs={tabs}
+                presetData={presetData}
+                services={services}
+                handleRunPreset={handleRunPreset}
+                handleServiceAction={handleServiceAction}
+             />
+           </div>
+         )}
+
+         {isSmall && isSidebarOpen && (
+            <div 
+              onClick={() => setIsSidebarOpen(false)}
+              style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40 }} 
+            />
          )}
 
           <div className="panel" style={{ flex: 1, overflow: 'hidden' }}>
@@ -329,6 +382,7 @@ function App() {
                    setLogHeight={setLogHeight}
                    logData={logData}
                    settings={appConfig.settings}
+                   isSmall={isSmall}
                 />
              )}
           </div>

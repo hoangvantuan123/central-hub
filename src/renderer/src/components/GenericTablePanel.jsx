@@ -17,7 +17,8 @@ export default function GenericTablePanel({
   logHeight,
   setLogHeight,
   logData,
-  settings
+  settings,
+  isSmall
 }) {
   const logRef = useRef(null);
   const [cfPid, setCfPid] = useState('');
@@ -139,12 +140,12 @@ export default function GenericTablePanel({
             <tr>
               <th className="cell" style={{ width: '80px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>PID</th>
               <th className="cell" style={{ color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>SERVICE_ID</th>
-              <th className="cell" style={{ width: '100px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>STATUS</th>
-              <th className="cell" style={{ width: '130px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>CPU / MEM</th>
-              {activeTab === 'projects' && (
+              <th className="cell" style={{ width: isSmall ? '80px' : '100px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>STATUS</th>
+              {!isSmall && <th className="cell" style={{ width: '130px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>CPU / MEM</th>}
+              {(activeTab === 'projects' && !isSmall) && (
                 <th className="cell" style={{ width: '90px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>RESTARTS</th>
               )}
-              <th className="cell" style={{ width: '200px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>ACTION</th>
+              <th className="cell" style={{ width: isSmall ? '120px' : '200px', color: theme.textMuted, fontWeight: 'bold', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>ACTION</th>
             </tr>
           </thead>
           <tbody>
@@ -164,19 +165,23 @@ export default function GenericTablePanel({
                         {p.pm2_env.status.toUpperCase()}
                      </span>
                   </td>
-                  <td className="cell" style={{ color: theme.primary, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
-                     {p.monit ? (
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                           <div style={{ width: '40px', textAlign: 'right' }}>{p.monit.cpu}%</div>
-                           <div style={{ padding: '0 5px', color: theme.textMuted }}>/</div>
-                           <div style={{ width: '45px', textAlign: 'right' }}>{(p.monit.memory / 1024 / 1024).toFixed(1)}</div>
-                           <div style={{ marginLeft: '2px', fontSize: '10px' }}>MB</div>
-                        </div>
-                     ) : 'WAITING...'}
-                  </td>
-                  <td className="cell" style={{ color: theme.warning, fontWeight: 'bold', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
-                     {p.pm2_env.restart_time || 0}
-                  </td>
+                  {!isSmall && (
+                     <td className="cell" style={{ color: theme.primary, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                        {p.monit ? (
+                           <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <div style={{ width: '40px', textAlign: 'right' }}>{p.monit.cpu}%</div>
+                              <div style={{ padding: '0 5px', color: theme.textMuted }}>/</div>
+                              <div style={{ width: '45px', textAlign: 'right' }}>{(p.monit.memory / 1024 / 1024).toFixed(1)}</div>
+                              <div style={{ marginLeft: '2px', fontSize: '10px' }}>MB</div>
+                           </div>
+                        ) : 'WAITING...'}
+                     </td>
+                  )}
+                  {(activeTab === 'projects' && !isSmall) && (
+                     <td className="cell" style={{ color: theme.warning, fontWeight: 'bold', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                        {p.pm2_env.restart_time || 0}
+                     </td>
+                  )}
                   <td className="cell">
                     {p.pm2_env.status === 'online' ? (
                        <div style={{ display: 'flex', gap: '5px' }}>
@@ -206,15 +211,71 @@ export default function GenericTablePanel({
                         {p.status.toUpperCase()}
                      </span>
                   </td>
-                  <td className="cell" style={{ color: theme.textMuted, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
-                     -- / --
-                  </td>
-                  <td className="cell">
-                     <div style={{ display: 'flex', gap: '5px' }}>
-                       <button className="btn btn-primary" onClick={() => handleServiceAction({ action: 'start', path: p.path, command: p.command, processName: p.processName })} style={{ padding: '6px 10px', fontSize: '10px' }}>▶ RUN</button>
-                       <button className="btn btn-stop" onClick={() => handleServiceAction({ action: 'stop', processName: p.processName })} style={{ padding: '6px 10px', fontSize: '10px' }}>■ KILL</button>
-                     </div>
-                  </td>
+                  {!isSmall && (
+                     <td className="cell" style={{ color: theme.textMuted, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                        -- / --
+                     </td>
+                  )}
+                   <td className="cell">
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        {activeTab === 'redis' ? (
+                          <>
+                            {p.rawStatus === 'NOT_INSTALLED' ? (
+                              <button 
+                                className="btn btn-primary" 
+                                onClick={() => handleServiceAction({ action: 'redis_install', command: { serviceName: p.serviceName, confPath: p.confPath } })}
+                                style={{ padding: '6px 10px', fontSize: '10px' }}>
+                                ⚙ INSTALL
+                              </button>
+                            ) : (
+                              <>
+                                <button 
+                                  className="btn btn-start" 
+                                  onClick={() => handleServiceAction({ action: 'redis_start', command: { serviceName: p.serviceName } })} 
+                                  disabled={p.status === 'online'}
+                                  style={{ padding: '6px 10px', fontSize: '10px', opacity: p.status === 'online' ? 0.5 : 1 }}>
+                                  ▶ START
+                                </button>
+                                <button 
+                                  className="btn btn-stop" 
+                                  onClick={() => handleServiceAction({ action: 'redis_stop', command: { serviceName: p.serviceName } })} 
+                                  disabled={p.status === 'offline'}
+                                  style={{ padding: '6px 10px', fontSize: '10px', opacity: p.status === 'offline' ? 0.5 : 1 }}>
+                                  ■ STOP
+                                </button>
+                                <button 
+                                  className="btn" 
+                                  onClick={() => fetchServiceLogs(p.logPath)}
+                                  style={{ padding: '6px 10px', fontSize: '10px', borderColor: theme.primary, color: theme.primary }}>
+                                  📑 LOGS
+                                </button>
+                                <button 
+                                  className="btn" 
+                                  onClick={() => handleServiceAction({ action: 'open_file', path: p.confPath })}
+                                  style={{ padding: '6px 10px', fontSize: '10px', borderColor: theme.warning, color: theme.warning }}>
+                                  ⚙
+                                </button>
+                                <button 
+                                  className="btn" 
+                                  onClick={() => {
+                                    if(window.confirm(`Gỡ cài đặt ${p.serviceName}?`)) {
+                                      handleServiceAction({ action: 'redis_uninstall', command: { serviceName: p.serviceName } })
+                                    }
+                                  }}
+                                  style={{ padding: '6px 10px', fontSize: '10px', borderColor: theme.danger, color: theme.danger }}>
+                                  🗑
+                                </button>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <button className="btn btn-primary" onClick={() => handleServiceAction({ action: 'start', path: p.path, command: p.command, processName: p.processName })} style={{ padding: '6px 10px', fontSize: '10px' }}>▶ RUN</button>
+                            <button className="btn btn-stop" onClick={() => handleServiceAction({ action: 'stop', processName: p.processName })} style={{ padding: '6px 10px', fontSize: '10px' }}>■ KILL</button>
+                          </>
+                        )}
+                      </div>
+                   </td>
                </tr>
             ))}
           </tbody>

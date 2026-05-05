@@ -82,11 +82,25 @@
     ],
     "presetRedis": [
       {
-        "id": "redis_main",
-        "name": "REDIS NODE 1",
-        "path": "C:\\Program Files\\Redis",
-        "command": "redis-server.exe",
-        "processName": "redis-server.exe"
+        "id": "redis_auth",
+        "name": "REDIS AUTH",
+        "serviceName": "redis_auth",
+        "confPath": "C:\\Program Files\\Redis\\instances\\redis_auth.conf",
+        "logPath": "C:\\Program Files\\Redis\\instances\\redis_auth.log"
+      },
+      {
+        "id": "redis_production",
+        "name": "REDIS PRODUCTION",
+        "serviceName": "redis_production",
+        "confPath": "C:\\Program Files\\Redis\\instances\\redis_production.conf",
+        "logPath": "C:\\Program Files\\Redis\\instances\\redis_production.log"
+      },
+      {
+        "id": "redis_basic",
+        "name": "REDIS BASIC",
+        "serviceName": "redis_basic",
+        "confPath": "C:\\Program Files\\Redis\\instances\\redis_basic.conf",
+        "logPath": "C:\\Program Files\\Redis\\instances\\redis_basic.log"
       }
     ],
     "presetCloudflare": [

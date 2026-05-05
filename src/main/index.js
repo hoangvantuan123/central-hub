@@ -188,10 +188,30 @@ const killProcess = (processName) => {
   })
 }
 
+const checkWindowsService = (serviceName) => {
+  return new Promise((resolve) => {
+    exec(`sc query "${serviceName}"`, (err, stdout) => {
+      if (err || stdout.includes('1060')) return resolve('NOT_INSTALLED')
+      if (stdout.includes('RUNNING')) return resolve('RUNNING')
+      if (stdout.includes('STOPPED')) return resolve('STOPPED')
+      if (stdout.includes('START_PENDING')) return resolve('START_PENDING')
+      if (stdout.includes('STOP_PENDING')) return resolve('STOP_PENDING')
+      resolve('STOPPED')
+    })
+  })
+}
+
 ipcMain.handle('services:status', async () => {
   const nginx = await checkProcess('nginx.exe')
   const redis = await checkProcess('redis-server.exe')
   const cloudflare = await checkProcess('cloudflared.exe')
+
+  // Check specific Redis services
+  const redisNodes = {
+    redis_auth: await checkWindowsService('redis_auth'),
+    redis_production: await checkWindowsService('redis_production'),
+    redis_basic: await checkWindowsService('redis_basic')
+  }
 
   const cfServiceRaw = await new Promise((resolve) => {
     exec('sc query Cloudflared', (err, stdout) => {
@@ -208,7 +228,15 @@ ipcMain.handle('services:status', async () => {
   const cfServiceRunning = cfStatus === 'RUNNING';
   const cfServiceInstalled = !cfServiceRaw.includes('1060');
 
-  return { nginx, redis, cloudflare, cfServiceRunning, cfServiceInstalled, cfStatus }
+  return { 
+    nginx, 
+    redis, 
+    cloudflare, 
+    cfServiceRunning, 
+    cfServiceInstalled, 
+    cfStatus,
+    redisNodes
+  }
 })
 
 ipcMain.handle('services:action', (event, { action, path, command, processName }) => {
@@ -265,6 +293,23 @@ ipcMain.handle('services:action', (event, { action, path, command, processName }
         if (errMsg) reject(new Error(errMsg))
         else resolve(true)
       })
+    } else if (action === 'redis_install') {
+      const { serviceName, confPath } = command
+      const binPath = `"C:\\Program Files\\Redis\\redis-server.exe" --service-run "${confPath}"`
+      const psCmd = `powershell -Command "Start-Process sc.exe -ArgumentList 'create ${serviceName} binPath= \\\"${binPath}\\\" start= auto' -Verb RunAs -WindowStyle Hidden"`
+      exec(psCmd, { windowsHide: true }, (err, stdout) => err ? reject(err) : resolve(stdout || `Đã gửi lệnh cài đặt ${serviceName}.`))
+    } else if (action === 'redis_uninstall') {
+      const { serviceName } = command
+      const psCmd = `powershell -Command "Start-Process sc.exe -ArgumentList 'delete ${serviceName}' -Verb RunAs -WindowStyle Hidden"`
+      exec(psCmd, { windowsHide: true }, (err, stdout) => err ? reject(err) : resolve(stdout || `Đã gửi lệnh xóa ${serviceName}.`))
+    } else if (action === 'redis_start') {
+      const { serviceName } = command
+      const psCmd = `powershell -Command "Start-Process sc.exe -ArgumentList 'start ${serviceName}' -Verb RunAs -WindowStyle Hidden"`
+      exec(psCmd, { windowsHide: true }, (err, stdout) => err ? reject(err) : resolve(stdout || `Đã gửi lệnh khởi động ${serviceName}.`))
+    } else if (action === 'redis_stop') {
+      const { serviceName } = command
+      const psCmd = `powershell -Command "Start-Process sc.exe -ArgumentList 'stop ${serviceName}' -Verb RunAs -WindowStyle Hidden"`
+      exec(psCmd, { windowsHide: true }, (err, stdout) => err ? reject(err) : resolve(stdout || `Đã gửi lệnh dừng ${serviceName}.`))
     } else if (action === 'start') {
       if (!path || !command) return reject(new Error('Cần thông tin lệnh và đường dẫn'))
       // Để lệnh chạy độc lập và hiện cửa sổ CMD cho người dùng theo dõi
