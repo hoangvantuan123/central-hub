@@ -5,7 +5,30 @@ import pm2 from 'pm2'
 import fs from 'fs'
 import si from 'systeminformation'
 
+// Logging setup
+const LOG_DIR = app.isPackaged 
+  ? (process.env.PORTABLE_EXECUTABLE_DIR || dirname(app.getPath('exe')))
+  : app.getAppPath()
+const LOG_PATH = join(LOG_DIR, 'error.log')
 
+function logToFile(msg) {
+  try {
+    const timestamp = new Date().toISOString()
+    const logMsg = `[${timestamp}] ${msg}\n`
+    fs.appendFileSync(LOG_PATH, logMsg)
+  } catch (err) {
+    console.error('Failed to write to log file:', err)
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  logToFile(`UNCAUGHT EXCEPTION: ${err.stack || err}`)
+  app.quit()
+})
+
+process.on('unhandledRejection', (reason) => {
+  logToFile(`UNHANDLED REJECTION: ${reason}`)
+})
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -41,6 +64,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  logToFile(`App starting...`)
+  logToFile(`Executable Path: ${app.getPath('exe')}`)
+  logToFile(`Config Path: ${CONFIG_PATH}`)
+  
   createWindow()
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -48,8 +75,13 @@ app.whenReady().then(() => {
 
   pm2.connect((err) => {
     if (err) {
+      logToFile(`PM2 CONNECT ERROR: ${err.message || err}`)
       console.error(err)
-      process.exit(2)
+      // Don't exit immediately, maybe show a message box if possible
+      // but for now, at least we log it.
+      // process.exit(2) 
+    } else {
+      logToFile('PM2 connected successfully')
     }
   })
 })
@@ -64,10 +96,20 @@ app.on('window-all-closed', () => {
    PM2 IPC HANDLERS
 ========================================= */
 ipcMain.handle('pm2:list', () => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      logToFile('PM2 List Timeout: PM2 daemon might be unresponsive.')
+      resolve([])
+    }, 2000)
+
     pm2.list((err, list) => {
-      if (err) reject(err)
-      else resolve(list)
+      clearTimeout(timeout)
+      if (err) {
+        logToFile(`PM2 List Error: ${err.message || err}`)
+        resolve([])
+      } else {
+        resolve(list || [])
+      }
     })
   })
 })
@@ -115,9 +157,14 @@ ipcMain.handle('pm2:delete', (event, id) => {
 
 ipcMain.handle('pm2:save', () => {
   return new Promise((resolve, reject) => {
-    exec('pm2 save', { windowsHide: true }, (err, stdout) => {
-      if (err) reject(err)
-      else resolve(stdout)
+    pm2.dump((err, stdout) => {
+      if (err) {
+        logToFile(`PM2 SAVE ERROR: ${err.message || err}`)
+        reject(err)
+      } else {
+        logToFile('PM2 configuration saved successfully')
+        resolve(stdout)
+      }
     })
   })
 })
@@ -345,13 +392,21 @@ let staticSystemData = null;
 ipcMain.handle('system:static', async () => {
   if (staticSystemData) return staticSystemData;
   try {
+    const safeSi = async (fn, defaultVal) => {
+      try { return await fn(); }
+      catch (e) { 
+        logToFile(`SI ERROR (${fn.name || 'anonymous'}): ${e.message}`);
+        return defaultVal; 
+      }
+    };
+
     const [cpu, os, graphics, memLayout, baseboard, mem] = await Promise.all([
-      si.cpu(),
-      si.osInfo(),
-      si.graphics(),
-      si.memLayout(),
-      si.baseboard(),
-      si.mem()
+      safeSi(() => si.cpu(), {}),
+      safeSi(() => si.osInfo(), {}),
+      safeSi(() => si.graphics(), { controllers: [] }),
+      safeSi(() => si.memLayout(), []),
+      safeSi(() => si.baseboard(), {}),
+      safeSi(() => si.mem(), { total: 0 })
     ]);
     staticSystemData = {
       cpu: {
@@ -380,27 +435,42 @@ ipcMain.handle('system:static', async () => {
     };
     return staticSystemData;
   } catch (err) {
+    logToFile(`Static Info Global Error: ${err.message}`);
     console.error('Static Info Error:', err);
     return null;
   }
-});
+})
 
 // Dynamic Status: Fetch every interval
 ipcMain.handle('system:status', async () => {
   try {
+    const safeSi = async (fn, defaultVal) => {
+      try { return await fn(); }
+      catch (e) { 
+        // Only log serious errors, or use a flag to avoid flooding logs
+        return defaultVal; 
+      }
+    };
+
     const [currentLoad, mem, fsSize, networkStats, fsStats, ping, processes, networkInterfaces] = await Promise.all([
-      si.currentLoad(),
-      si.mem(),
-      si.fsSize(),
-      si.networkStats(),
-      si.fsStats(),
-      si.inetLatency('8.8.8.8'),
-      si.processes(),
-      si.networkInterfaces()
+      safeSi(() => si.currentLoad(), { currentLoad: 0, cpus: [] }),
+      safeSi(() => si.mem(), { total: 0, used: 0 }),
+      safeSi(() => si.fsSize(), []),
+      safeSi(() => si.networkStats(), []),
+      safeSi(() => si.fsStats(), { rx_sec: 0, wx_sec: 0 }),
+      // Giới hạn thời gian ping tối đa 1.5s
+      Promise.race([
+        si.inetLatency('8.8.8.8'),
+        new Promise(res => setTimeout(() => res(0), 1500))
+      ]).catch(() => 0),
+      safeSi(() => si.processes(), { list: [] }),
+      safeSi(() => si.networkInterfaces(), [])
     ]);
 
     const pm2Stats = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ count: 0, mem: 0, restarts: 0, topApps: [] }), 1500);
       pm2.list((err, list) => {
+        clearTimeout(timeout);
         if (err || !list) return resolve({ count: 0, mem: 0, restarts: 0, topApps: [] });
         const totalMem = list.reduce((acc, p) => acc + (p.monit ? p.monit.memory : 0), 0);
         const totalRestarts = list.reduce((acc, p) => acc + (p.pm2_env ? p.pm2_env.restart_time : 0), 0);
@@ -444,10 +514,11 @@ ipcMain.handle('system:status', async () => {
       uptime: si.time().uptime
     };
   } catch (err) {
+    logToFile(`Dynamic Status Global Error: ${err.message}`);
     console.error('Dynamic Status Error:', err);
     return null;
   }
-});
+})
 
 
 
@@ -455,7 +526,7 @@ ipcMain.handle('system:status', async () => {
    DYNAMIC CONFIG IPC HANDLERS
 ========================================= */
 const CONFIG_DIR = app.isPackaged 
-  ? join(dirname(app.getPath('exe')), 'config') 
+  ? join(process.env.PORTABLE_EXECUTABLE_DIR || dirname(app.getPath('exe')), 'config') 
   : join(app.getAppPath(), 'config')
 const CONFIG_FILENAME = 'app_config.json'
 const CONFIG_PATH = join(CONFIG_DIR, CONFIG_FILENAME)
@@ -545,19 +616,23 @@ const DEFAULT_CONFIG = {
 
 ipcMain.handle('config:load', async () => {
   try {
+    logToFile(`Loading config from: ${CONFIG_PATH}`)
     if (!fs.existsSync(CONFIG_DIR)) {
+      logToFile(`Creating config directory: ${CONFIG_DIR}`)
       fs.mkdirSync(CONFIG_DIR, { recursive: true })
     }
 
     if (fs.existsSync(CONFIG_PATH)) {
       const data = fs.readFileSync(CONFIG_PATH, 'utf-8')
+      logToFile('Config file found and read.')
       return JSON.parse(data)
     } else {
-      // Nếu chưa có file config, tạo file mặc định
+      logToFile('Config file not found, creating default.')
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8')
       return DEFAULT_CONFIG
     }
   } catch (err) {
+    logToFile(`CONFIG LOAD ERROR: ${err.message}`)
     console.error('Lỗi load config:', err)
     return DEFAULT_CONFIG
   }
