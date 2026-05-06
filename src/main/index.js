@@ -5,6 +5,15 @@ import pm2 from 'pm2'
 import fs from 'fs'
 import si from 'systeminformation'
 
+// 1. Tối ưu đồ họa: Tắt tăng tốc phần cứng để chạy được trên máy cũ/máy ảo
+app.disableHardwareAcceleration()
+
+// 2. Cơ chế Single Instance: Chỉ cho phép mở 1 app duy nhất
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+}
+
 // Logging setup
 const LOG_DIR = app.isPackaged 
   ? (process.env.PORTABLE_EXECUTABLE_DIR || dirname(app.getPath('exe')))
@@ -63,27 +72,37 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  logToFile(`App starting...`)
-  logToFile(`Executable Path: ${app.getPath('exe')}`)
-  logToFile(`Config Path: ${CONFIG_PATH}`)
+app.whenReady().then(async () => {
+  logToFile(`================================================`)
+  logToFile(`Ứng dụng đang khởi động...`)
+  logToFile(`Phiên bản Windows: ${process.platform} ${process.arch}`)
+  logToFile(`Đường dẫn EXE: ${app.getPath('exe')}`)
+  logToFile(`Thư mục Log: ${LOG_DIR}`)
+  logToFile(`Đường dẫn Config: ${CONFIG_PATH}`)
   
   createWindow()
+  
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 
+  // Kết nối PM2 với cơ chế thử lại hoặc bỏ qua nếu lỗi
   pm2.connect((err) => {
     if (err) {
-      logToFile(`PM2 CONNECT ERROR: ${err.message || err}`)
-      console.error(err)
-      // Don't exit immediately, maybe show a message box if possible
-      // but for now, at least we log it.
-      // process.exit(2) 
+      logToFile(`PM2 CONNECT ERROR: ${err.message || err}. App vẫn tiếp tục chạy nhưng các tính năng PM2 sẽ bị hạn chế.`)
     } else {
-      logToFile('PM2 connected successfully')
+      logToFile('PM2 đã kết nối thành công.')
     }
   })
+})
+
+// Xử lý khi có người cố tình mở thêm 1 instance nữa
+app.on('second-instance', () => {
+  const windows = BrowserWindow.getAllWindows()
+  if (windows.length) {
+    if (windows[0].isMinimized()) windows[0].restore()
+    windows[0].focus()
+  }
 })
 
 app.on('window-all-closed', () => {
@@ -249,22 +268,31 @@ const checkWindowsService = (serviceName) => {
 }
 
 ipcMain.handle('services:status', async () => {
-  const nginx = await checkProcess('nginx.exe')
-  const redis = await checkProcess('redis-server.exe')
-  const cloudflare = await checkProcess('cloudflared.exe')
+  const safeCheck = async (fn, defaultVal) => {
+    return Promise.race([
+      fn(),
+      new Promise(res => setTimeout(() => res(defaultVal), 1500))
+    ]).catch(() => defaultVal)
+  }
+
+  const nginx = await safeCheck(() => checkProcess('nginx.exe'), false)
+  const redis = await safeCheck(() => checkProcess('redis-server.exe'), false)
+  const cloudflare = await safeCheck(() => checkProcess('cloudflared.exe'), false)
 
   // Check specific Redis services
   const redisNodes = {
-    redis_auth: await checkWindowsService('redis_auth'),
-    redis_production: await checkWindowsService('redis_production'),
-    redis_basic: await checkWindowsService('redis_basic')
+    redis_auth: await safeCheck(() => checkWindowsService('redis_auth'), 'NOT_INSTALLED'),
+    redis_production: await safeCheck(() => checkWindowsService('redis_production'), 'NOT_INSTALLED'),
+    redis_basic: await safeCheck(() => checkWindowsService('redis_basic'), 'NOT_INSTALLED')
   }
 
-  const cfServiceRaw = await new Promise((resolve) => {
-    exec('sc query Cloudflared', (err, stdout) => {
-      resolve(stdout || '')
+  const cfServiceRaw = await safeCheck(async () => {
+    return new Promise((resolve) => {
+      exec('sc query Cloudflared', (err, stdout) => {
+        resolve(stdout || '')
+      })
     })
-  })
+  }, '')
   
   let cfStatus = 'STOPPED';
   if (cfServiceRaw.includes('RUNNING')) cfStatus = 'RUNNING';
